@@ -3,137 +3,197 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fermap Logística</title>
+    <title>Fermap Logística - Painel Flutuante</title>
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.min.css" />
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     
     <style>
-        :root { --p: #4285F4; --s: #34A853; --dark: #202124; --orange: #ed8936; --purple: #6b46c1; --red: #EA4335; }
+        :root { --p: #4285F4; --s: #34A853; --dark: #202124; --orange: #ed8936; --purple: #6b46c1; --red: #EA4335; --gray: #70757a; --teal: #00897b; }
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Roboto', sans-serif; }
-        body { background: #f8f9fa; height: 100vh; display: flex; overflow: hidden; }
+        body { background: #f8f9fa; height: 100vh; display: flex; overflow: hidden; position: relative; }
         
-        .sidebar { width: 420px; background: white; display: flex; flex-direction: column; box-shadow: 2px 0 12px rgba(0,0,0,0.1); z-index: 100; }
-        .sidebar-header { padding: 20px; background: var(--dark); color: white; border-bottom: 4px solid var(--p); }
+        /* SIDEBAR (Esquerda) */
+        .sidebar { width: 380px; background: white; display: flex; flex-direction: column; box-shadow: 2px 0 12px rgba(0,0,0,0.1); z-index: 100; }
+        .sidebar-header { padding: 15px; background: var(--dark); color: white; border-bottom: 4px solid var(--p); }
         
-        .search-area { padding: 15px; background: #fff; border-bottom: 1px solid #ddd; }
-        .input-group { margin-bottom: 10px; }
-        .input-group label { display: block; font-size: 10px; font-weight: bold; color: #70757a; margin-bottom: 4px; text-transform: uppercase; }
-        input { width: 100%; padding: 10px 15px; border: 1px solid #dadce0; border-radius: 8px; font-size: 13px; outline: none; }
+        /* NOVO PAINEL FLUTUANTE DE BAIRROS (Direita) */
+        #floatingPanel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 280px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(5px);
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            z-index: 2000; /* Acima do mapa */
+            display: none; /* Só aparece quando tem dados */
+            border: 1px solid #ddd;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+        }
 
+        .fp-header {
+            background: var(--teal);
+            color: white;
+            padding: 12px;
+            border-radius: 8px 8px 0 0;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #bairroListVertical {
+            padding: 10px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        /* Estilo do Item de Bairro na Lista Direita */
+        .bairro-card {
+            background: white;
+            border: 1px solid #b2dfdb;
+            margin-bottom: 6px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: grab;
+            transition: 0.2s;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .bairro-card:hover { border-color: var(--teal); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .bairro-card:active { cursor: grabbing; background: #e0f2f1; }
+        
+        .bc-left { display: flex; align-items: center; gap: 8px; }
+        .bc-seq { 
+            background: var(--teal); color: white; 
+            font-size: 11px; font-weight: bold; 
+            width: 22px; height: 22px; 
+            border-radius: 50%; 
+            display: flex; align-items: center; justify-content: center;
+        }
+        .bc-name { font-size: 11px; font-weight: bold; color: #333; text-transform: uppercase; }
+        .bc-count { 
+            font-size: 10px; color: #666; background: #f1f1f1; 
+            padding: 2px 6px; border-radius: 10px; font-weight: bold; border: 1px solid #ddd; 
+        }
+
+        /* AREA DE BUSCA E EDIÇÃO (Esquerda) */
+        .search-area { padding: 10px 15px; background: #fff; border-bottom: 1px solid #ddd; }
+        .input-group { margin-bottom: 8px; }
+        input { width: 100%; padding: 8px 12px; border: 1px solid #dadce0; border-radius: 6px; font-size: 13px; outline: none; }
+        .pac-container { z-index: 99999 !important; border-radius: 8px; border: 1px solid #ddd !important; }
+
+        /* LISTA DE ENTREGAS */
         #stopList { flex: 1; overflow-y: auto; padding: 15px; background: #f8f9fa; }
-        .stop-item { background: white; border: 1px solid #dadce0; padding: 12px; margin-bottom: 8px; border-radius: 8px; cursor: grab; display: flex; flex-direction: column; position: relative; }
-        .stop-item.fixed-base { background: #e8f0fe; border-left: 5px solid var(--p); cursor: default; }
-        .stop-item.fixed-end { background: #ffebee; border-left: 5px solid var(--red); cursor: default; }
+        .stop-item { background: white; border: 1px solid #dadce0; padding: 10px; margin-bottom: 6px; border-radius: 6px; display: flex; flex-direction: column; position: relative; }
+        .stop-item.pending { border: 2px dashed var(--red); background: #fff5f5; }
+        .stop-item.editing { border: 2px solid var(--orange); background: #fffaf0; }
+        .stop-item.fixed-base { background: #e8f0fe; border-left: 4px solid var(--p); }
+        .stop-item.fixed-end { background: #ffebee; border-left: 4px solid var(--red); }
         
         .stop-main { display: flex; align-items: center; width: 100%; }
-        .stop-number { width: 24px; height: 24px; background: var(--p); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; margin-right: 12px; flex-shrink: 0; }
+        .stop-number { width: 22px; height: 22px; background: var(--p); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; margin-right: 10px; flex-shrink: 0; }
         .stop-info { flex: 1; overflow: hidden; }
-        .stop-info b { display: block; font-size: 13px; }
+        .stop-info b { display: block; font-size: 12px; color: #202124; }
+        
+        .obs-display { font-size: 10px; margin-top: 4px; line-height: 1.3; }
+        .obs-valor { color: #1a73e8; font-weight: bold; background: #e8f0fe; padding: 1px 4px; border-radius: 3px; }
+        .obs-pag { color: #d93025; font-weight: bold; padding-left: 4px; }
+        .bairro-badge { background: var(--teal); color: white; font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: bold; text-transform: uppercase; display: inline-block; margin-top: 2px; }
+        .status-badge { font-size: 9px; font-weight: bold; background: var(--red); color: white; padding: 2px 4px; border-radius: 4px; margin-top: 4px; display: inline-block; }
 
         .obs-edit-container { display: flex; margin-top: 8px; gap: 5px; align-items: center; }
-        .input-obs-inline { flex: 1; font-size: 11px; padding: 6px; border: 1px dashed #ccc; border-radius: 4px; background: #fff; }
-        .btn-save-obs { background: var(--s); color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: 0.2s; }
-        .btn-del { border: none; background: none; color: var(--red); cursor: pointer; font-weight: bold; padding: 5px; position: absolute; top: 8px; right: 8px; }
+        .input-obs-inline { flex: 1; font-size: 11px; padding: 6px; border: 1px dashed #ccc; border-radius: 4px; }
+        .btn-action { background: none; border: none; cursor: pointer; color: var(--gray); display: flex; }
 
-        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 15px; border-bottom: 1px solid #eee; }
-        .btn { padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; color: white; transition: 0.2s; text-transform: uppercase; font-size: 11px; text-align: center; }
+        /* BOTÕES */
+        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px 15px; border-bottom: 1px solid #eee; }
+        .btn { padding: 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; transition: 0.2s; text-transform: uppercase; font-size: 10px; text-align: center; }
         .btn-opt { background: var(--orange); }
         .btn-invert { background: var(--purple); }
-        .btn-csv { background: #718096; grid-column: span 2; }
+        .btn-csv { background: var(--gray); grid-column: span 2; }
         .btn-pdf { background: #E11D48; grid-column: span 2; }
-        .btn-wa { background: #25D366; grid-column: span 2; font-size: 14px; margin-top: 5px; }
+        .btn-wa { background: #25D366; grid-column: span 2; font-size: 12px; margin-top: 2px; }
 
+        /* MAPA */
         #map { flex: 1; z-index: 1; position: relative; }
-        
-        /* Oculta painel nativo do Routing Machine */
         .leaflet-routing-container { display: none !important; }
-        
-        .leaflet-marker-icon { cursor: pointer !important; }
-
         .num-icon, .num-icon-end { border: 2px solid white; border-radius: 50%; color: white; font-weight: bold; text-align: center; line-height: 22px; font-size: 11px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
         .num-icon { background: var(--p); }
         .num-icon-end { background: var(--red); }
-        
-        .custom-label { background: rgba(255, 255, 255, 0.95); border: 1px solid var(--p); border-radius: 4px; padding: 4px 8px; font-size: 11px; color: #333; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2); white-space: nowrap; }
+        .custom-label { background: rgba(255, 255, 255, 0.95); border: 1px solid var(--p); border-radius: 4px; padding: 4px 8px; font-size: 11px; color: #333; text-align: center; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 
-        #summary-card {
-            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-            background: white; padding: 10px 25px; border-radius: 50px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3); z-index: 999;
-            display: none; gap: 20px; align-items: center;
-            font-family: 'Roboto', sans-serif; border: 2px solid var(--p);
-        }
-        .summary-item { display: flex; align-items: center; gap: 8px; }
-        .summary-item i { color: var(--p); font-size: 20px; }
-        .summary-text { display: flex; flex-direction: column; line-height: 1.2; }
-        .summary-label { font-size: 9px; text-transform: uppercase; color: #777; font-weight: bold; }
-        .summary-value { font-size: 16px; font-weight: bold; color: #333; }
-        .divider { width: 1px; height: 25px; background: #ddd; }
-
-        #loading { display: none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: var(--dark); color: white; padding: 10px 25px; border-radius: 30px; z-index: 9999; }
-        
-        /* Responsividade para Celular */
-        @media (max-width: 768px) {
-            body { flex-direction: column; }
-            .sidebar { width: 100%; height: 50%; order: 2; }
-            #map { height: 50%; order: 1; }
-            #summary-card { bottom: auto; top: 10px; width: 90%; justify-content: center; }
-        }
+        #summary-card { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); background: white; padding: 10px 25px; border-radius: 50px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); z-index: 999; display: none; gap: 20px; align-items: center; border: 2px solid var(--p); }
+        #loading { display: none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: var(--dark); color: white; padding: 10px 25px; border-radius: 30px; z-index: 99999; }
     </style>
 </head>
 <body>
 
-<div id="loading">⌛ Calculando Rota...</div>
+<div id="loading">⌛ Processando...</div>
+
+<div id="floatingPanel" style="display:none;">
+    <div class="fp-header">
+        <span>Sequência de Bairros</span>
+        <i class="material-icons" style="font-size:16px">format_list_numbered</i>
+    </div>
+    <div id="bairroListVertical">
+        </div>
+    <div style="padding:10px; background:#f5f5f5; border-top:1px solid #ddd; font-size:9px; color:#777; text-align:center;">
+        Arraste para reordenar a prioridade
+    </div>
+</div>
 
 <div id="summary-card">
-    <div class="summary-item">
-        <i class="material-icons">directions_car</i>
-        <div class="summary-text"><span class="summary-label">Distância</span><span class="summary-value" id="total-dist">0 km</span></div>
+    <div style="display: flex; align-items: center; gap: 8px;">
+        <i class="material-icons" style="color:var(--p)">directions_car</i>
+        <div style="display: flex; flex-direction: column;"><span style="font-size: 9px; text-transform: uppercase; color: #777;">Distância</span><span style="font-size: 16px; font-weight: bold;" id="total-dist">0 km</span></div>
     </div>
-    <div class="divider"></div>
-    <div class="summary-item">
-        <i class="material-icons">schedule</i>
-        <div class="summary-text"><span class="summary-label">Tempo</span><span class="summary-value" id="total-time">0 min</span></div>
+    <div style="width: 1px; height: 25px; background: #ddd;"></div>
+    <div style="display: flex; align-items: center; gap: 8px;">
+        <i class="material-icons" style="color:var(--p)">schedule</i>
+        <div style="display: flex; flex-direction: column;"><span style="font-size: 9px; text-transform: uppercase; color: #777;">Tempo</span><span style="font-size: 16px; font-weight: bold;" id="total-time">0 min</span></div>
     </div>
 </div>
 
 <div class="sidebar">
     <div class="sidebar-header">
         <h2>Fermap Logística</h2>
-        <p style="font-size: 11px; opacity: 0.8;">Gerenciador de Rotas</p>
+        <p style="font-size: 11px; opacity: 0.8;">Gestão Completa + Painel</p>
     </div>
 
     <div class="search-area">
         <div class="input-group">
-            <label>1. Endereço (Busca Google)</label>
-            <input type="text" id="addressSearch" placeholder="Digite o endereço do cliente...">
+            <label id="searchLabel">Adicionar/Editar Ponto</label>
+            <input type="text" id="addressSearch" placeholder="Buscar endereço...">
         </div>
-        <div class="input-group">
-            <label>2. Coordenadas (Lat, Long)</label>
-            <input type="text" id="coordsInput" placeholder="-0.034987, -51.074846">
-        </div>
-        <div id="confirmAdd" style="display: none; padding: 10px; background: #e8f0fe; border-radius: 8px; margin-top: 10px;">
-            <input type="text" id="manualName" placeholder="Nome do Cliente">
-            <input type="text" id="manualObs" placeholder="Observação">
-            <button class="btn" style="background: var(--p); width: 100%;" onclick="confirmAddPoint()">Confirmar Adição</button>
+        <div id="confirmAdd" style="display: none; padding: 10px; background: #e8f0fe; border-radius: 8px; margin-top: 5px; border: 1px solid var(--p);">
+            <input type="text" id="manualName" placeholder="Nome do Cliente" style="margin-bottom:5px">
+            <input type="text" id="manualObs" placeholder="Valor - Pagamento" style="margin-bottom:5px">
+            <input type="text" id="manualBairro" placeholder="Bairro (Opcional)">
+            <button class="btn" style="background: var(--p); width: 100%; margin-top:5px;" onclick="confirmAddPoint()">Confirmar</button>
+            <button class="btn" style="background: var(--red); width: 100%; margin-top:5px;" onclick="cancelEditing()">Cancelar</button>
         </div>
     </div>
 
     <div class="btn-grid">
-        <button class="btn btn-opt" onclick="optimizeRouteWithReturn()">✨ Otimizar Rota</button>
-        <button class="btn btn-invert" onclick="reverseMiddleRoute()">🔄 Inverter (Meio)</button>
-        <button class="btn btn-csv" onclick="document.getElementById('csvFile').click()">📁 Importar CSV</button>
+        <button class="btn btn-opt" onclick="optimizeGlobal()" style="grid-column: span 2;">✨ Otimizar Geral (AP-010/Eixo)</button>
+        <button class="btn btn-invert" onclick="reverseMiddleRoute()">🔄 Inverter</button>
+        <button class="btn btn-csv" onclick="document.getElementById('csvFile').click()">📁 CSV</button>
         <input type="file" id="csvFile" accept=".csv" style="display:none">
-        <button class="btn btn-pdf" onclick="exportRouteToPDF()">📄 Gerar PDF</button>
-        <button class="btn btn-wa" onclick="sendToWhatsApp()">💬 WhatsApp</button>
+        <button class="btn btn-pdf" onclick="exportRouteToPDF()">📄 PDF</button>
+        <button class="btn btn-wa" onclick="sendToWhatsApp()">💬 Whats</button>
     </div>
 
     <div id="stopList"></div>
-    <div style="padding: 10px 15px; border-top: 1px solid #ddd;">
-        <button class="btn" style="background: #70757a; width: 100%; font-size: 10px;" onclick="resetMap()">Limpar Tudo</button>
-    </div>
 </div>
 
 <div id="map"></div>
@@ -141,224 +201,64 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
-
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyASqT7DnMM4756HZM5m7cMt-nE7eWMoi7Y&libraries=places"></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyASqT7DnMM4756HZM5m7cMt-nE7eWMoi7Y&libraries=places&language=pt-BR"></script>
 
 <script>
-    // Configurações Iniciais - Coordenadas da Fermap
-    const baseCoords = { lat: 0.034987156301830635, lng: -51.074846156278724 };
-    const fermapStart = { nome: "FERMAP (SAÍDA)", obs: "Início", lat: baseCoords.lat, lng: baseCoords.lng };
-    const fermapEnd = { nome: "FERMAP (CHEGADA)", obs: "Fim", lat: baseCoords.lat, lng: baseCoords.lng };
+    const baseCoords = { lat: 0.034987, lng: -51.074846 };
+    const BR156_AXIS_LNG = -51.0660; 
+    const AP010_HINT = { lat: -0.0175, lng: -51.1000 }; 
 
-    let map, routingControl, markers = [], points = [], tempCoord = null, lastRouteData = null;
-    
-    function cleanObs(text) { if (!text) return ""; return text.trim().replace(/^-+\s*/, ''); }
+    let map, routingControl, points = [], tempCoord = null, editingIndex = null;
+    let neighborhoodOrder = []; 
+
+    function formatObs(text) {
+        if (!text) return "";
+        let val = text.toString().trim();
+        const regex = /^([\d\.,]+)\s*-\s*(.*)$/i;
+        const match = val.match(regex);
+        if (match) return `<span class="obs-valor">R$ ${match[1]}</span> <span class="obs-pag">| ${match[2].replace(/DIAS/gi, " Dias")}</span>`;
+        return val;
+    }
+
+    function getRawObs(html) {
+        if (!html) return "";
+        let doc = new DOMParser().parseFromString(html, 'text/html');
+        return doc.body.textContent.replace("R$ ", "").replace(" | ", " - ").replace(" Dias", "DIAS").trim();
+    }
 
     function init() {
-        // Camadas de Mapa
-        const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OSM' });
-        const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles © Esri', maxZoom: 19 });
-        const dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '© CartoDB', maxZoom: 19 });
-
-        map = L.map('map', { center: [baseCoords.lat, baseCoords.lng], zoom: 14, layers: [osm], zoomControl: false });
-
+        map = L.map('map', { center: [baseCoords.lat, baseCoords.lng], zoom: 13, layers: [L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')], zoomControl: false });
         L.control.zoom({ position: 'bottomright' }).addTo(map);
-        L.control.layers({ "🗺️ Padrão": osm, "🛰️ Satélite": satellite, "🌑 Dark Mode": dark }).addTo(map);
-
-        points = [fermapStart, fermapEnd];
+        
+        points = [
+            { nome: "FERMAP (SAÍDA)", obs: "Início", lat: baseCoords.lat, lng: baseCoords.lng, valid: true, bairro: "FERMAP" },
+            { nome: "FERMAP (CHEGADA)", obs: "Fim", lat: baseCoords.lat, lng: baseCoords.lng, valid: true, bairro: "FERMAP" }
+        ];
+        
         updateUI();
 
-        // Autocomplete do Google
-        const autocomplete = new google.maps.places.Autocomplete(document.getElementById('addressSearch'));
+        const input = document.getElementById('addressSearch');
+        const autocomplete = new google.maps.places.Autocomplete(input, { componentRestrictions: { country: "br" }, fields: ["geometry", "name"] });
+
         autocomplete.addListener('place_changed', () => {
             const place = autocomplete.getPlace();
-            if (!place.geometry) return;
+            if (!place || !place.geometry) return;
             tempCoord = [place.geometry.location.lat(), place.geometry.location.lng()];
-            document.getElementById('manualName').value = place.name;
-            document.getElementById('confirmAdd').style.display = 'block';
-        });
-
-        // Entrada Manual de Coordenadas
-        document.getElementById('coordsInput').addEventListener('input', function(e) {
-            const val = e.target.value;
-            if (val.includes(',')) {
-                const parts = val.split(',');
-                const lat = parseFloat(parts[0].trim()), lng = parseFloat(parts[1].trim());
-                if (!isNaN(lat) && !isNaN(lng)) {
-                    tempCoord = [lat, lng];
-                    document.getElementById('manualName').value = "Ponto por Coordenada";
-                    document.getElementById('confirmAdd').style.display = 'block';
-                    map.setView(tempCoord, 16);
-                }
+            if (editingIndex === null) {
+                document.getElementById('manualName').value = place.name;
+                document.getElementById('confirmAdd').style.display = 'block';
+            } else {
+                document.getElementById('confirmAdd').style.display = 'block';
+                map.setView(tempCoord, 16);
             }
         });
 
-        // Drag and Drop da Lista
         Sortable.create(document.getElementById('stopList'), { animation: 150, filter: ".fixed-base, .fixed-end", onEnd: reorderPoints });
+        // Sortable do NOVO PAINEL
+        Sortable.create(document.getElementById('bairroListVertical'), { animation: 150, onEnd: applyNeighborhoodOrder });
     }
 
-    function confirmAddPoint() {
-        const nome = document.getElementById('manualName').value;
-        const obs = cleanObs(document.getElementById('manualObs').value);
-        if (tempCoord && nome) {
-            // Adiciona antes do último ponto (retorno)
-            points.splice(points.length - 1, 0, { nome, obs, lat: tempCoord[0], lng: tempCoord[1] });
-            
-            // Limpa campos
-            document.getElementById('confirmAdd').style.display = 'none';
-            document.getElementById('addressSearch').value = '';
-            document.getElementById('coordsInput').value = '';
-            document.getElementById('manualName').value = '';
-            document.getElementById('manualObs').value = '';
-            tempCoord = null;
-            
-            updateUI(); calculateRoute();
-        }
-    }
-
-    function saveObs(index) {
-        points[index].obs = cleanObs(document.getElementById(`inline-obs-${index}`).value);
-        updateUI(); showMarkers(); 
-    }
-
-    function updateUI() {
-        const list = document.getElementById('stopList');
-        list.innerHTML = '';
-        points.forEach((p, i) => {
-            const num = (i + 1).toString().padStart(2, '0');
-            const isFirst = (i === 0), isLast = (i === points.length - 1);
-            let cssClass = isFirst ? "fixed-base" : (isLast ? "fixed-end" : "");
-            
-            list.innerHTML += `
-            <div class="stop-item ${cssClass}" data-index="${i}">
-                <div class="stop-main">
-                    <div class="stop-number" style="${isLast ? 'background:var(--red)' : ''}">${num}</div>
-                    <div class="stop-info"><b>${p.nome}</b></div>
-                </div>
-                <div class="obs-edit-container">
-                    <input type="text" class="input-obs-inline" id="inline-obs-${i}" value="${p.obs || ''}" placeholder="Obs...">
-                    <button class="btn-save-obs" onclick="saveObs(${i})">💾</button>
-                </div>
-                ${(!isFirst && !isLast) ? `<button class="btn-del" onclick="removePoint(${i})">✕</button>` : ''}
-            </div>`;
-        });
-        showMarkers();
-    }
-
-    function showMarkers() {
-        markers.forEach(m => map.removeLayer(m)); 
-        markers = [];
-        points.forEach((p, i) => {
-            const num = (i + 1).toString().padStart(2, '0');
-            const isFirst = (i === 0), isLast = (i === points.length - 1);
-            const iconClass = isLast ? 'num-icon-end' : 'num-icon';
-            
-            const marker = L.marker([p.lat, p.lng], {
-                icon: L.divIcon({ className: iconClass, html: num, iconSize: [24, 24] }),
-                zIndexOffset: isFirst ? 1000 : (isLast ? 0 : 500),
-                title: "Clique para abrir no Google Maps"
-            }).addTo(map);
-
-            // Link corrigido para padrão Google Maps
-            marker.on('click', function() {
-                window.open(`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`, '_blank');
-            });
-
-            const labelContent = `<b>${p.nome}</b>${p.obs ? '<br><span style="color:#D00; font-style:italic">' + p.obs + '</span>' : ''}`;
-            let tooltipDir = isLast ? 'bottom' : 'top';
-            let tooltipOffset = isLast ? [0, 10] : [0, -10];
-
-            marker.bindTooltip(labelContent, { 
-                permanent: true, direction: tooltipDir, className: 'custom-label', offset: tooltipOffset 
-            });
-            markers.push(marker);
-        });
-        if (points.length > 0) map.fitBounds(L.latLngBounds(points.map(p => [p.lat, p.lng])), {padding:[50,50]});
-    }
-
-    function calculateRoute() {
-        if (points.length < 2) { 
-            document.getElementById('summary-card').style.display = 'none';
-            if (routingControl) { map.removeControl(routingControl); routingControl = null; }
-            return; 
-        }
-
-        if (routingControl) { map.removeControl(routingControl); routingControl = null; }
-        
-        try {
-            routingControl = L.Routing.control({
-                waypoints: points.map(p => L.latLng(p.lat, p.lng)),
-                router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1', profile: 'driving' }),
-                createMarker: () => null, 
-                show: true, 
-                addWaypoints: false, 
-                lineOptions: { styles: [{ color: '#4285F4', weight: 6, opacity: 0.6 }] }
-            })
-            .on('routesfound', function(e) {
-                lastRouteData = e.routes[0];
-                const distKm = (lastRouteData.summary.totalDistance / 1000).toFixed(1);
-                const timeMin = Math.round(lastRouteData.summary.totalTime / 60);
-                document.getElementById('total-dist').innerText = distKm + " km";
-                document.getElementById('total-time').innerText = timeMin + " min";
-                document.getElementById('summary-card').style.display = 'flex';
-            })
-            .on('routingerror', function(e) { console.warn('Erro rota:', e); })
-            .addTo(map);
-        } catch(err) { console.error(err); }
-    }
-
-    function optimizeRouteWithReturn() {
-        if (points.length < 3) return alert("Adicione pontos intermediários para otimizar.");
-        document.getElementById('loading').style.display = 'block';
-        
-        setTimeout(() => {
-            // Algoritmo Vizinho Mais Próximo + 2-Opt (Simples e Eficiente)
-            const startNode = points[0];
-            const endNode = points[points.length - 1];
-            let middlePoints = points.slice(1, points.length - 1);
-            let path = [startNode, endNode];
-            
-            // Construção Inicial
-            while (middlePoints.length > 0) {
-                let bestNodeIdx = -1, bestInsertPos = -1, minAddedCost = Infinity;
-                for (let i = 0; i < middlePoints.length; i++) {
-                    const node = middlePoints[i];
-                    for (let j = 0; j < path.length - 1; j++) {
-                        const p1 = path[j], p2 = path[j+1];
-                        const addedCost = (Math.sqrt(distSq(p1, node)) + Math.sqrt(distSq(node, p2))) - Math.sqrt(distSq(p1, p2));
-                        if (addedCost < minAddedCost) { minAddedCost = addedCost; bestNodeIdx = i; bestInsertPos = j + 1; }
-                    }
-                }
-                path.splice(bestInsertPos, 0, middlePoints[bestNodeIdx]);
-                middlePoints.splice(bestNodeIdx, 1);
-            }
-
-            // Otimização 2-Opt
-            let improved = true;
-            while (improved) {
-                improved = false;
-                for (let i = 1; i < path.length - 2; i++) { 
-                    for (let j = i + 1; j < path.length - 1; j++) {
-                        const newPath = path.slice(0, i).concat(path.slice(i, j + 1).reverse()).concat(path.slice(j + 1));
-                        if (calcTotalDist(newPath) < calcTotalDist(path)) { path = newPath; improved = true; }
-                    }
-                }
-            }
-            points = path; updateUI(); calculateRoute();
-            document.getElementById('loading').style.display = 'none';
-        }, 100);
-    }
-
-    function distSq(p1, p2) { return Math.pow(p1.lat - p2.lat, 2) + Math.pow(p1.lng - p2.lng, 2); }
-    function calcTotalDist(p) { let d = 0; for (let i = 0; i < p.length - 1; i++) d += Math.sqrt(distSq(p[i], p[i+1])); return d; }
-
-    function reverseMiddleRoute() {
-        if (points.length < 4) return;
-        const middle = points.slice(1, points.length - 1).reverse();
-        points = [points[0], ...middle, points[points.length - 1]];
-        updateUI(); calculateRoute();
-    }
-
+    // --- IMPORTAÇÃO CSV ---
     document.getElementById('csvFile').onchange = e => {
         const reader = new FileReader();
         reader.onload = ev => {
@@ -367,73 +267,301 @@
                 if (!l.trim()) return;
                 const sep = l.includes(';') ? ';' : ',';
                 const c = l.replace(/"/g,'').split(sep);
-                if (c.length >= 5) {
-                    const lat = parseFloat(c[3].replace(',','.')), lng = parseFloat(c[4].replace(',','.'));
-                    const rawObs = c.length > 5 ? c.slice(5).join(sep).trim() : "";
-                    const obs = cleanObs(rawObs);
-                    if (!isNaN(lat) && !isNaN(lng)) { 
-                        points.splice(points.length - 1, 0, { nome: c[1], obs, lat, lng });
+                if (c.length >= 2) {
+                    const lat = parseFloat(c[3]?.replace(',','.')), lng = parseFloat(c[4]?.replace(',','.'));
+                    const ok = !isNaN(lat) && !isNaN(lng);
+                    
+                    let bairro = "OUTROS";
+                    let desc = "";
+                    if (c.length > 6) {
+                        bairro = c[c.length - 1].trim().toUpperCase();
+                        desc = c.slice(5, c.length - 1).join(sep).trim();
+                    } else {
+                        desc = c[5] || "";
                     }
+
+                    points.splice(points.length - 1, 0, { 
+                        nome: c[1] || "Cliente", 
+                        obs: formatObs(desc), 
+                        bairro: bairro,
+                        lat: ok ? lat : null, 
+                        lng: ok ? lng : null, 
+                        valid: ok 
+                    });
                 }
             });
-            updateUI(); calculateRoute();
+            updateUI(); 
+            updateNeighborhoodList(); 
+            applyNeighborhoodOrder(); 
         };
         reader.readAsText(e.target.files[0]);
     };
 
-    function translateInstruction(text) {
-        // Traduções manuais para manter o OSRM em PT-BR
-        return text
-            .replace(/Head/g, "Siga")
-            .replace(/Turn right/g, "Vire à direita")
-            .replace(/Turn left/g, "Vire à esquerda")
-            .replace(/Make a U-turn/g, "Faça o retorno")
-            .replace(/Continue/g, "Continue")
-            .replace(/Arrive at/g, "Chegue em")
-            .replace(/You have arrived/g, "Você chegou")
-            .replace(/at your destination/g, "no destino")
-            .replace(/on/g, "na");
+    // --- LÓGICA DO NOVO PAINEL ---
+    function updateNeighborhoodList() {
+        const validPoints = points.filter(p => p.valid && !p.nome.includes("FERMAP"));
+        const counts = {};
+        validPoints.forEach(p => { let b = p.bairro || "OUTROS"; counts[b] = (counts[b] || 0) + 1; });
+        const uniqueBairros = Object.keys(counts);
+
+        // Captura ordem atual para manter consistência
+        const currentVisualOrder = [];
+        document.querySelectorAll('.bairro-card').forEach(el => currentVisualOrder.push(el.dataset.bairro));
+        
+        let newOrder = [];
+        currentVisualOrder.forEach(b => { if (uniqueBairros.includes(b)) newOrder.push(b); });
+        uniqueBairros.forEach(b => { if (!newOrder.includes(b)) newOrder.push(b); });
+
+        neighborhoodOrder = newOrder;
+        const container = document.getElementById('bairroListVertical');
+        container.innerHTML = '';
+        
+        // Renderiza lista vertical com números sequenciais (01, 02...)
+        neighborhoodOrder.forEach((bairro, index) => {
+            let seqNum = (index + 1).toString().padStart(2, '0');
+            container.innerHTML += `
+                <div class="bairro-card" data-bairro="${bairro}">
+                    <div class="bc-left">
+                        <span class="bc-seq">${seqNum}</span>
+                        <span class="bc-name">${bairro}</span>
+                    </div>
+                    <span class="bc-count">${counts[bairro]} peds</span>
+                </div>
+            `;
+        });
+
+        const panel = document.getElementById('floatingPanel');
+        if (uniqueBairros.length > 0) panel.style.display = 'flex';
+        else panel.style.display = 'none';
+    }
+
+    function applyNeighborhoodOrder() {
+        document.getElementById('loading').style.display = 'block';
+        setTimeout(() => {
+            // Recaptura ordem visual
+            const newOrder = [];
+            document.querySelectorAll('.bairro-card').forEach(el => newOrder.push(el.dataset.bairro));
+            neighborhoodOrder = newOrder;
+
+            // Atualiza os números visuais (01, 02...) imediatamente sem recriar DOM
+            document.querySelectorAll('.bairro-card').forEach((el, idx) => {
+                el.querySelector('.bc-seq').innerText = (idx + 1).toString().padStart(2, '0');
+            });
+
+            const start = points.find(p => p.nome.includes("(SAÍDA)"));
+            const end = points.find(p => p.nome.includes("(CHEGADA)"));
+            const clients = points.filter(p => p !== start && p !== end && p.valid);
+            const invalids = points.filter(p => !p.valid);
+
+            let reorderedPoints = [start];
+            let currentPos = start;
+
+            newOrder.forEach(bairroName => {
+                let clientsInBairro = clients.filter(p => (p.bairro || "OUTROS") === bairroName);
+                if (clientsInBairro.length > 0) {
+                    let sortedInner = optimizeInternal(clientsInBairro, currentPos);
+                    reorderedPoints.push(...sortedInner);
+                    currentPos = sortedInner[sortedInner.length - 1];
+                }
+            });
+
+            reorderedPoints.push(end);
+            reorderedPoints.push(...invalids);
+            points = reorderedPoints;
+            updateUI(); calculateRoute();
+            document.getElementById('loading').style.display = 'none';
+        }, 100);
+    }
+
+    // --- OTIMIZAÇÃO GERAL ---
+    function optimizeGlobal() {
+        const valids = points.filter((p, i) => p.valid && i !== 0 && i !== points.length-1);
+        if (valids.length < 2) return alert("Adicione pontos.");
+        document.getElementById('loading').style.display = 'block';
+        
+        setTimeout(() => {
+            const start = points[0]; const end = points.find(p => p.nome.includes("CHEGADA"));
+            let unvisited = [...valids]; 
+            let path = [start];
+
+            while (unvisited.length > 0) {
+                let current = path[path.length - 1]; 
+                let bestIdx = -1, minDist = Infinity;
+
+                for (let i = 0; i < unvisited.length; i++) {
+                    let d = Math.pow(current.lat - unvisited[i].lat, 2) + Math.pow(current.lng - unvisited[i].lng, 2);
+                    if ((current.lat < -0.01) !== (unvisited[i].lat < -0.01)) d *= 12; 
+                    if (current.lat > 0.05 && unvisited[i].lat > 0.05) { 
+                        if ((current.lng > BR156_AXIS_LNG) !== (unvisited[i].lng > BR156_AXIS_LNG)) d *= 6; 
+                    }
+                    if (d < minDist) { minDist = d; bestIdx = i; }
+                }
+                path.push(unvisited[bestIdx]); 
+                unvisited.splice(bestIdx, 1);
+            }
+            path.push(end); 
+            points = [...path, ...points.filter(p => !p.valid)];
+            updateUI(); calculateRoute(); 
+            document.getElementById('loading').style.display = 'none';
+        }, 300);
+    }
+
+    function optimizeInternal(pts, startP) {
+        let unvisited = [...pts];
+        let path = [];
+        let curr = startP;
+        while (unvisited.length > 0) {
+            let bestIdx = -1, minD = Infinity;
+            for(let i=0; i<unvisited.length; i++) {
+                let d = Math.pow(curr.lat - unvisited[i].lat, 2) + Math.pow(curr.lng - unvisited[i].lng, 2);
+                if(d < minD) { minD = d; bestIdx = i; }
+            }
+            path.push(unvisited[bestIdx]);
+            curr = unvisited[bestIdx];
+            unvisited.splice(bestIdx, 1);
+        }
+        return path;
+    }
+
+    // --- FUNÇÕES DE EDIÇÃO E UI ---
+    function confirmAddPoint() {
+        const nome = document.getElementById('manualName').value;
+        const obs = document.getElementById('manualObs').value;
+        const bairro = document.getElementById('manualBairro').value;
+        if (tempCoord && nome) {
+            const newP = { nome, obs: formatObs(obs), bairro: bairro ? bairro.toUpperCase() : "OUTROS", lat: tempCoord[0], lng: tempCoord[1], valid: true };
+            if (editingIndex !== null) { points[editingIndex] = newP; cancelEditing(); }
+            else { points.splice(points.length - 1, 0, newP); }
+            document.getElementById('confirmAdd').style.display = 'none';
+            document.getElementById('addressSearch').value = '';
+            document.getElementById('manualName').value = '';
+            document.getElementById('manualObs').value = '';
+            document.getElementById('manualBairro').value = '';
+            tempCoord = null; updateUI(); updateNeighborhoodList(); calculateRoute();
+        }
+    }
+
+    function startEditing(idx) {
+        editingIndex = idx;
+        const p = points[idx];
+        document.getElementById('manualName').value = p.nome;
+        document.getElementById('manualObs').value = getRawObs(p.obs);
+        document.getElementById('manualBairro').value = p.bairro || "";
+        document.getElementById('confirmAdd').style.display = 'block';
+        document.getElementById('searchLabel').innerText = "📍 Editando: " + p.nome;
+        updateUI();
+    }
+
+    function cancelEditing() {
+        editingIndex = null;
+        document.getElementById('confirmAdd').style.display = 'none';
+        document.getElementById('searchLabel').innerText = "Adicionar/Editar Ponto";
+        updateUI();
+    }
+
+    function saveObs(idx) {
+        let val = document.getElementById(`inline-obs-${idx}`).value;
+        points[idx].obs = formatObs(val);
+        updateUI();
+    }
+
+    function updateUI() {
+        const list = document.getElementById('stopList');
+        list.innerHTML = '';
+        points.forEach((p, i) => {
+            const isFirst = i === 0, isLast = i === points.length - 1;
+            const itemClass = `stop-item ${isFirst ? 'fixed-base' : isLast ? 'fixed-end' : ''} ${!p.valid ? 'pending' : ''} ${editingIndex === i ? 'editing' : ''}`;
+            
+            list.innerHTML += `
+            <div class="${itemClass}" data-index="${i}">
+                <div class="stop-main">
+                    <div class="stop-number" style="${isLast ? 'background:var(--red)' : (!p.valid ? 'background:var(--gray)' : '')}">${(i + 1).toString().padStart(2, '0')}</div>
+                    <div class="stop-info">
+                        <b>${p.nome}</b>
+                        ${p.bairro && !isFirst && !isLast ? `<span class="bairro-badge">${p.bairro}</span>` : ''}
+                        <div class="obs-display">${p.obs || ''}</div>
+                        ${!p.valid ? '<span class="status-badge">⚠️ Sem Localização</span>' : ''}
+                    </div>
+                    <div style="display:flex; gap:5px">
+                        ${!p.valid ? `<button class="btn-action" onclick="startEditing(${i})"><i class="material-icons">add_location_alt</i></button>` : ''}
+                        ${(!isFirst && !isLast) ? `<button class="btn-action" onclick="removePoint(${i})"><i class="material-icons">delete_sweep</i></button>` : ''}
+                    </div>
+                </div>
+                <div class="obs-edit-container">
+                    <input type="text" class="input-obs-inline" id="inline-obs-${i}" value="${getRawObs(p.obs)}" placeholder="Valor - Pagamento">
+                    <button class="btn-save-obs" style="background:var(--s); color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;" onclick="saveObs(${i})">💾</button>
+                </div>
+            </div>`;
+        });
+        showMarkers();
+    }
+
+    function showMarkers() {
+        map.eachLayer(l => { if (l instanceof L.Marker) map.removeLayer(l); });
+        points.filter(p => p.valid).forEach((p, i) => {
+            const isLast = p.nome.includes("CHEGADA");
+            const marker = L.marker([p.lat, p.lng], {
+                icon: L.divIcon({ className: isLast ? 'num-icon-end' : 'num-icon', html: (points.indexOf(p)+1).toString().padStart(2, '0'), iconSize: [24, 24] })
+            }).addTo(map);
+            marker.bindTooltip(`<b>${p.nome}</b><br>${p.bairro ? '['+p.bairro+']' : ''}`, { permanent: true, direction: 'top', className: 'custom-label' });
+        });
+        const valids = points.filter(p => p.valid);
+        if (valids.length > 0) map.fitBounds(L.latLngBounds(valids.map(v => [v.lat, v.lng])), {padding:[50,50]});
+    }
+
+    function calculateRoute() {
+        const valids = points.filter(p => p.valid);
+        if (valids.length < 2) { if (routingControl) map.removeControl(routingControl); return; }
+        if (routingControl) map.removeControl(routingControl);
+        
+        let waypoints = valids.map(p => L.latLng(p.lat, p.lng));
+        const hasSouth = valids.some(p => p.lat < -0.01 && !p.nome.includes("FERMAP"));
+        if (hasSouth && valids[1].lat < -0.01) waypoints.splice(1, 0, L.latLng(AP010_HINT.lat, AP010_HINT.lng));
+
+        routingControl = L.Routing.control({
+            waypoints: waypoints,
+            router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1', profile: 'driving' }),
+            createMarker: () => null, addWaypoints: false,
+            lineOptions: { styles: [{ color: '#4285F4', weight: 6, opacity: 0.6 }] }
+        }).on('routesfound', e => {
+            const r = e.routes[0];
+            document.getElementById('total-dist').innerText = (r.summary.totalDistance / 1000).toFixed(1) + " km";
+            document.getElementById('total-time').innerText = Math.round(r.summary.totalTime / 60) + " min";
+            document.getElementById('summary-card').style.display = 'flex';
+        }).addTo(map);
+    }
+
+    function reverseMiddleRoute() {
+        const start = points[0];
+        const end = points.find(p => p.nome.includes("CHEGADA"));
+        const mid = points.filter(p => p !== start && p !== end && p.valid).reverse();
+        const invalid = points.filter(p => !p.valid);
+        points = [start, ...mid, end, ...invalid];
+        updateUI(); calculateRoute();
     }
 
     function exportRouteToPDF() {
-        if (!lastRouteData) return alert("Calcule a rota primeiro!");
+        const valids = points.filter(p => p.valid);
         const win = window.open('', '_blank');
-        let html = `<html><head><title>Rota Fermap</title><style>body{font-family:sans-serif;padding:20px} h1{border-bottom:2px solid #4285F4; color:#202124} table{width:100%;border-collapse:collapse;margin-top:15px} th,td{padding:10px;border-bottom:1px solid #ddd;text-align:left} th{background:#4285F4;color:white} .summary{background:#f1f3f4;padding:15px;border-radius:8px}</style></head><body>`;
-        html += `<h1>🚛 Relatório de Rota - Fermap</h1>`;
-        html += `<div class="summary"><p><b>Distância Total:</b> ${(lastRouteData.summary.totalDistance/1000).toFixed(2)} km</p><p><b>Tempo Total:</b> ${Math.round(lastRouteData.summary.totalTime/60)} min</p></div>`;
-        html += `<h3>📍 Paradas</h3><table><tr><th>#</th><th>Cliente</th><th>Obs</th></tr>`;
-        points.forEach((p,i) => html += `<tr><td>${i+1}</td><td>${p.nome}</td><td>${p.obs || '-'}</td></tr>`);
-        html += `</table><h3>🛤️ Trajeto</h3><table>`;
-        lastRouteData.instructions.forEach(inst => html += `<tr><td>${translateInstruction(inst.text)}</td><td>${inst.distance}m</td></tr>`);
-        html += `</table></body></html>`;
-        win.document.write(html); win.document.close(); win.print();
+        let html = `<h1>Relatório Fermap</h1><table><tr><th>#</th><th>Cliente</th><th>Bairro</th><th>Obs</th></tr>`;
+        valids.forEach((p, i) => html += `<tr><td>${i+1}</td><td>${p.nome}</td><td>${p.bairro||'-'}</td><td>${getRawObs(p.obs)}</td></tr>`);
+        win.document.write(html + "</table>"); win.print();
     }
-
-    function removePoint(idx) { if (idx === 0 || idx === points.length - 1) return; points.splice(idx, 1); updateUI(); calculateRoute(); }
-    
-    function reorderPoints() {
-        const newPoints = [];
-        document.querySelectorAll('.stop-item').forEach(item => newPoints.push(points[parseInt(item.getAttribute('data-index'))]));
-        points = newPoints; updateUI(); calculateRoute();
-    }
-    
-    function resetMap() { points = [fermapStart, fermapEnd]; updateUI(); if (routingControl) { map.removeControl(routingControl); routingControl = null; } document.getElementById('summary-card').style.display='none'; }
 
     function sendToWhatsApp() {
-        if (points.length < 2) return;
-        
-        // Link geral da rota (Google Maps Direções)
+        const valids = points.filter(p => p.valid);
         let routeUrl = "https://www.google.com/maps/dir/";
-        points.forEach(p => { routeUrl += `${p.lat},${p.lng}/`; });
-
-        let msg = "🚛 *ROTA FERMAP*%0A%0A📍 *Link da Rota:* " + encodeURIComponent(routeUrl) + "%0A%0A";
-        
-        points.forEach((p, i) => { 
-            const linkPonto = `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`;
-            msg += `*${(i+1).toString().padStart(2,'0')}* - ${p.nome}%0A${p.obs ? '📝 ' + p.obs + '%0A' : ''}🔗 GPS: ${encodeURIComponent(linkPonto)}%0A%0A`;
-        });
-        
+        valids.forEach(p => routeUrl += `${p.lat},${p.lng}/`);
+        let msg = "🚛 *ROTA FERMAP*%0A📍 Link: " + encodeURIComponent(routeUrl) + "%0A";
+        valids.forEach((p, i) => msg += `*${i+1}* ${p.nome} - ${p.bairro || ''}%0A`);
         window.open(`https://wa.me/?text=${msg}`);
+    }
+
+    function removePoint(idx) { points.splice(idx, 1); updateUI(); updateNeighborhoodList(); calculateRoute(); }
+    function reorderPoints() {
+        const n = [];
+        document.querySelectorAll('#stopList .stop-item').forEach(item => n.push(points[parseInt(item.getAttribute('data-index'))]));
+        points = n; updateUI(); calculateRoute();
     }
 
     window.onload = init;
